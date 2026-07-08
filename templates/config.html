@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Gooten Settings{% endblock %}
+{% block content %}
+<h1>Gooten Supplier</h1>
+<div class="card">
+    <form method="post" action="/admin/suppliers/gooten/save" class="form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="form-group"><label for="recipe_id">Recipe ID</label><input type="text" id="recipe_id" name="recipe_id" value="{{ config.get('recipe_id', '') }}" required /></div>
+        <div class="form-group"><label for="partner_billing_key">Partner Billing Key</label><input type="password" id="partner_billing_key" name="partner_billing_key" value="{{ config.get('partner_billing_key', '') }}" /></div>
+        <div class="form-group"><label for="default_ship_type">Default ship type</label><input type="text" id="default_ship_type" name="default_ship_type" value="{{ config.get('default_ship_type', 'Standard') }}" /></div>
+        <div class="form-group"><label><input type="checkbox" name="is_active" {% if config.get('is_active') %}checked{% endif %} /> Active</label></div>
+        <button type="submit" class="btn btn--primary">Save</button>
+    </form>
+</div>
+<div class="card" style="margin-top:1.5em;">
+    <form method="post" action="/admin/suppliers/gooten/sync" class="form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <select name="import_status"><option value="draft">Draft</option><option value="published">Published</option></select>
+        <label><input type="checkbox" name="archive_missing" /> Archive missing</label>
+        <button type="submit" class="btn btn--secondary">Sync catalog</button>
+    </form>
+</div>
+<p><a href="/admin/suppliers">← Back</a></p>
+{% endblock %}
