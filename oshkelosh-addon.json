@@ -1,0 +1,9 @@
+{
+  "addon_id": "gooten",
+  "addon_name": "Gooten",
+  "addon_description": "Print-on-demand via Gooten API.",
+  "category": "supplier",
+  "version": "1.0.0",
+  "min_oshkelosh_version": "0.1.0",
+  "python_requires": ">=3.11"
+}
