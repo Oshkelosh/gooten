@@ -9,9 +9,13 @@ from pydantic import BaseModel, Field, SecretStr
 
 from app.addons.suppliers.base import SupplierAddon
 from app.addons.suppliers.gooten.catalog import normalize_gooten_catalog_products
-from app.addons.suppliers.gooten.client import GootenAPIError, GootenClient
+from app.addons.suppliers.gooten.client import (
+    GootenAPIError,
+    GootenClient,
+    parse_shipping_price_options,
+)
 from schemas.supplier import SupplierCatalogProduct
-from app.addons.log import info, warning
+from app.addons.log import exception, info, warning
 from app.addons.config_serialization import dump_addon_config
 
 
@@ -27,16 +31,19 @@ class GootenConfig(BaseModel):
 
 
 def _map_address(address: Dict[str, Any]) -> Dict[str, Any]:
+    from app.addons.suppliers.address import canonical_address
+
+    addr = canonical_address(address)
     payload = {
-        "Line1": address.get("line1", ""),
-        "City": address.get("city", ""),
-        "PostalCode": address.get("zip", ""),
-        "CountryCode": address.get("country", ""),
+        "Line1": addr["line1"],
+        "City": addr["city"],
+        "PostalCode": addr["zip"],
+        "CountryCode": addr["country_code"],
     }
-    if address.get("state"):
-        payload["State"] = address["state"]
-    if address.get("line2"):
-        payload["Line2"] = address["line2"]
+    if addr["state"]:
+        payload["State"] = addr["state"]
+    if addr["line2"]:
+        payload["Line2"] = addr["line2"]
     return payload
 
 
@@ -117,6 +124,79 @@ class GootenAddon(SupplierAddon):
                 return row
         return {"error": f"Gooten SKU '{product_id}' not found"}
 
+    def supports_shipping_quotes(self) -> bool:
+        return True
+
+    async def quote_shipping(
+        self,
+        items: List[Dict[str, Any]],
+        shipping_address: Dict[str, Any],
+        *,
+        currency: str | None = None,
+    ) -> int | None:
+        """Live Gooten rates; prefer Standard, else cheapest per item. None → Site Settings."""
+        details = await self.quote_shipping_details(
+            items, shipping_address, currency=currency
+        )
+        if details is None:
+            return None
+        return int(details["cents"])
+
+    async def quote_shipping_details(
+        self,
+        items: List[Dict[str, Any]],
+        shipping_address: Dict[str, Any],
+        *,
+        selected_id: str | None = None,
+        currency: str | None = None,
+    ) -> Dict[str, Any] | None:
+        """Live Gooten ShipTypes (aggregated across items); selected_id overrides default."""
+        from app.services.countries import normalize_country_code
+        from app.addons.suppliers.shipping_quote import pick_shipping_option
+
+        client = self._require_client()
+        try:
+            country_raw = (shipping_address or {}).get("country") or (
+                shipping_address or {}
+            ).get("country_code")
+            country_code = normalize_country_code(str(country_raw) if country_raw else None)
+            if not country_code:
+                return None
+            cart_items = []
+            for item in items:
+                sku = str(item.get("supplier_product_id") or "").strip()
+                if not sku:
+                    continue
+                cart_items.append(
+                    {"SKU": sku, "Quantity": int(item.get("quantity") or 1)}
+                )
+            if not cart_items:
+                return None
+            data = await client.get_shipping_prices(
+                cart_items,
+                country_code,
+                currency_code=str(currency or "USD").upper(),
+            )
+            options = parse_shipping_price_options(data)
+            chosen = pick_shipping_option(
+                options,
+                selected_id=selected_id,
+                preferred_ids=("standard",),
+            )
+            if chosen is None:
+                return None
+            return {
+                "cents": int(chosen["cents"]),
+                "selected_id": str(chosen["id"]),
+                "options": options,
+            }
+        except GootenAPIError as exc:
+            warning("Gooten", "quote_shipping error: {}", exc)
+            return None
+        except Exception:
+            exception("Gooten", "quote_shipping unexpected error")
+            return None
+
     async def create_order(
         self,
         items: List[Dict[str, Any]],
@@ -124,11 +204,17 @@ class GootenAddon(SupplierAddon):
         *,
         external_id: str | None = None,
         supplier_ref: str | None = None,
+        shipping_method: str | None = None,
+        currency: str | None = None,
     ) -> Dict[str, Any]:
         del supplier_ref
         client = self._require_client()
         cfg = self._config or {}
         try:
+            ship_type = (
+                (shipping_method or "").strip()
+                or str(cfg.get("default_ship_type") or "Standard")
+            )
             order_items = []
             for item in items:
                 sku = str(item.get("supplier_product_id") or "").strip()
@@ -138,7 +224,7 @@ class GootenAddon(SupplierAddon):
                     {
                         "SKU": sku,
                         "Quantity": int(item.get("quantity") or 1),
-                        "ShipType": str(cfg.get("default_ship_type") or "Standard"),
+                        "ShipType": ship_type,
                     }
                 )
             if not order_items:
@@ -148,6 +234,8 @@ class GootenAddon(SupplierAddon):
                 "ShipToAddress": _map_address(shipping_address),
                 "Items": order_items,
             }
+            if currency:
+                payload["CurrencyCode"] = str(currency).upper()
             if external_id:
                 payload["OrderReferenceId"] = external_id
 

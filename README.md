@@ -49,6 +49,7 @@ Multiple suppliers can be enabled at the same time. Fulfillment runs when an ord
 
 - **Variant supplier fields:** paid-order fulfillment reads Gooten SKUs from each **ProductVariant** row
 - **Fulfillment:** creates Gooten order using recipe ID and billing key
+- **Checkout shipping:** core calls `quote_shipping()` → Gooten shipping-prices endpoint for the cart (prefers Standard per item, else cheapest; sums per item). Unquoted or failed quotes fall back to Site Settings like any other supplier.
 - **Grouping:** line items grouped by fulfillment key `gooten`
 
 ## Variant supplier fields
