@@ -24,6 +24,10 @@ class GootenConfig(BaseModel):
     partner_billing_key: SecretStr = Field(default=..., description="Partner billing key")
     is_active: bool = Field(default=False)
     default_ship_type: str = Field(default="Standard")
+    necktag_image_url: str = Field(
+        default="",
+        description="Optional neck tag artwork URL applied to every order item",
+    )
 
     @classmethod
     def config_model(cls):
@@ -206,8 +210,10 @@ class GootenAddon(SupplierAddon):
         supplier_ref: str | None = None,
         shipping_method: str | None = None,
         currency: str | None = None,
+        gift_message: str | None = None,
+        packing_slip: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
-        del supplier_ref
+        del supplier_ref, gift_message, packing_slip
         client = self._require_client()
         cfg = self._config or {}
         try:
@@ -215,18 +221,20 @@ class GootenAddon(SupplierAddon):
                 (shipping_method or "").strip()
                 or str(cfg.get("default_ship_type") or "Standard")
             )
+            necktag = str(cfg.get("necktag_image_url") or "").strip()
             order_items = []
             for item in items:
                 sku = str(item.get("supplier_product_id") or "").strip()
                 if not sku:
                     continue
-                order_items.append(
-                    {
-                        "SKU": sku,
-                        "Quantity": int(item.get("quantity") or 1),
-                        "ShipType": ship_type,
-                    }
-                )
+                entry: Dict[str, Any] = {
+                    "SKU": sku,
+                    "Quantity": int(item.get("quantity") or 1),
+                    "ShipType": ship_type,
+                }
+                if necktag:
+                    entry["AddOns"] = {"necktag_image_url": necktag}
+                order_items.append(entry)
             if not order_items:
                 return {"success": False, "error": "No valid Gooten line items"}
 

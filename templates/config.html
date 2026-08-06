@@ -8,6 +8,13 @@
         <div class="form-group"><label for="recipe_id">Recipe ID</label><input type="text" id="recipe_id" name="recipe_id" value="{{ config.get('recipe_id', '') }}" required /></div>
         <div class="form-group"><label for="partner_billing_key">Partner Billing Key</label><input type="password" id="partner_billing_key" name="partner_billing_key" value="{{ config.get('partner_billing_key', '') }}" /></div>
         <div class="form-group"><label for="default_ship_type">Default ship type</label><input type="text" id="default_ship_type" name="default_ship_type" value="{{ config.get('default_ship_type', 'Standard') }}" /></div>
+        <div class="form-group">
+            <label for="necktag_image_url">Neck tag image URL</label>
+            <input type="url" id="necktag_image_url" name="necktag_image_url" value="{{ config.get('necktag_image_url', '') }}" placeholder="https://example.com/necktag.png" />
+            <small style="color:var(--clr-text-muted);display:block;margin-top:4px;">
+                Optional. Applied via item AddOns on every order. Packing slips are configured in the Gooten admin dashboard.
+            </small>
+        </div>
         <div class="form-group"><label><input type="checkbox" name="is_active" {% if config.get('is_active') %}checked{% endif %} /> Active</label></div>
         <button type="submit" class="btn btn--primary">Save</button>
     </form>

@@ -11,6 +11,7 @@ def _parse_form(form: Any) -> tuple[dict[str, Any], bool]:
         "partner_billing_key": form.get("partner_billing_key", ""),
         "is_active": form.get("is_active") == "on",
         "default_ship_type": form.get("default_ship_type") or "Standard",
+        "necktag_image_url": (form.get("necktag_image_url") or "").strip(),
     }, form.get("is_active") == "on"
 
 
